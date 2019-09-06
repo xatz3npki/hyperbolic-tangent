@@ -1,0 +1,646 @@
+from socket import *
+import time
+import struct
+import serial
+import numpy as np
+def mapyx(x, fi,fm,ti,tm):
+    y  = (x - fi)/(fm - fi) * (tm - ti) + ti
+    return y
+def funcderivativesech(a, x, c):
+    # derivative of hiperbolik secant
+    # ondalik = 0.0000001
+    yxeksibir = (a * (2/(e**(6*(x - ondalik) / c) + e**(-6*(x - ondalik) / c)))) - (a / 150)
+    yxartibir = (a * (2/(e**(6*(x + ondalik) / c) + e**(-6*(x + ondalik) / c)))) - (a / 150)
+    return - ((yxeksibir - yxartibir)/(2*ondalik))
+
+
+def funcsech(a, x, c):
+    # hiperbolik secant
+    yx = ((a + (a/210)) * (2/(e**(6*x / c) + e**(-6*x / c)))) - (a / 210)
+    return yx
+
+# Open grbl serial port
+if True:
+    s = serial.Serial('COM4', 115200)
+    # Wake up grbl
+    hh = '\r\n\r\n'
+    s.write(hh.encode('ascii'))
+    time.sleep(2)
+    s.flushInput()
+
+# Open udp port
+if True:
+    address = ('127.0.0.1', 49003)
+    server_socket = socket(AF_INET, SOCK_DGRAM)
+    server_socket.bind(address)
+    time.sleep(2)
+
+# Variable table
+if True:
+    limitangle = 84
+
+    cw = 0
+    pcw = 0
+
+    realisticarea = 1
+    WP = 1
+    cwwp = 0
+    wp1 = 0
+    wp2 = 0
+
+    birdenikiye = 0
+    ikidernbire = 0
+
+    sayim = 0
+
+    framebasinaeklenecekROLL = 0
+    newroll = 0
+    # lastrollraw = 0
+
+    frameneksibirRoll = 0
+    frameneksibirPitch = 0
+
+    frameneksiikiRoll = 0
+    frameneksiikiPitch = 0
+
+    frameneksiikiTime = 0
+    frameneksibirTime = 0
+    framenTime = 0
+
+    framenRoll_AVdegrees = 0
+    frameneksibirRoll_AVdegrees = 0
+    frameneksiikiRoll_AVdegrees = 0
+
+
+    frameneksibirPitch_raw = 0
+    frameneksibirRoll_raw = 0
+    endemikroll = 0
+
+    Pbirdenikiyesoldan = 0
+    Pbirdenikiyesagdan = 0
+    Nbirdenikiyesoldan = 0
+    Nbirdenikiyesagdan = 0
+
+    Pikidenbiresoldan = 0
+    Pikidenbiresagdan = 0
+    Nikidenbiresoldan = 0
+    Nikidenbiresagdan = 0
+
+    birdenA = 0
+    birdenB = 0
+    Adanbir = 0
+    Adaniki = 0
+    ikidenA = 0
+    ikidenB = 0
+    Bdeniki = 0
+    Bdenbir = 0
+
+    sayimbirdenA = 0
+    sayimbirdenB = 0
+    sayimAdanbir = 0
+    sayimAdaniki = 0
+    sayimikidenA = 0
+    sayimikidenB = 0
+    sayimBdeniki = 0
+    sayimBdenbir = 0
+
+    frameneksibirRoll_rawBypass = 0
+
+    cwrollpositivegecis = 0
+
+
+    birdenikiyePitchzipzip_P = 0
+    ikidenbirePitchzipzip_P = 0
+    birdenikiyePitchzipzip_N = 0
+    ikidenbirePitchzipzip_N = 0
+
+    lastvalue_birdenikiyePitchzipzip_P = 0
+    lastvalue_ikidenbirePitchzipzip_P = 0
+    lastvalue_birdenikiyePitchzipzip_N = 0
+    lastvalue_ikidenbirePitchzipzip_N = 0
+
+    sayimbirdenikiyePitchzipzip_P = 0
+    sayimikidenbirePitchzipzip_P = 0
+    sayimbirdenikiyePitchzipzip_N = 0
+    sayimikidenbirePitchzipzip_N = 0
+
+    birdenikiyePitchzipzip_P_motorswitch = 0
+    ikidenbirePitchzipzip_P_motorswitch = 0
+    birdenikiyePitchzipzip_N_motorswitch = 0
+    ikidenbirePitchzipzip_N_motorswitch = 0
+
+
+
+
+
+    ziptoparlamasuresiRoll = 2
+    ziptoparlamasuresiPitch = 2
+    ortframesuresi = 0.012
+
+    framesuresi = 0
+
+    e = 2.718281828459
+    ondalik = 0.0000001
+
+    farkframeneksibirPitch_raw = 0
+
+    rollbeta = 0
+    rollalfa = 0
+
+    rollfarki = 0
+
+    sayimAdanbiralfa = 0
+    sayimAdanikialfa = 0
+    sayimBdenikialfa = 0
+    sayimBdenbiralfa = 0
+
+
+
+    print(555)
+
+PitchLimitforRoll = 80
+# Main loop
+while True:
+    # print("------------------------------------------------------------->")
+
+
+    # Raw UDP data
+    recv_data, address = server_socket.recvfrom(128)
+    framenRoll = float("%f" % (struct.unpack('f', recv_data[49:53])))
+    framenPitch = float("%f" % (struct.unpack('f', recv_data[45:49])))
+    framenRoll_AVdegrees = float("%f" % (struct.unpack('f', recv_data[13:17]))) * 57.29577951308232
+    framenPitch_AVdegrees = float("%f" % (struct.unpack('f', recv_data[9:13]))) * 57.29577951308232
+
+
+
+    # Roll tur sayısı belirlenmesi ve720
+    if (frameneksiikiRoll - frameneksibirRoll) > 252:
+        cw = cw + 1
+    if (frameneksibirRoll - frameneksiikiRoll) > 252:
+        cw = cw - 1
+    frameneksibirRoll_rawBypass = frameneksibirRoll + (cw * 360)
+
+
+    # pitch garantisi hız ile alınacak
+    # pitch i -90+90 dan -180+180 e WP--- and 1den2ye sagdan mı soldan mi, realistic areanin belirlenmesi,zıpzıp derecesi ve switchinin belirlenmesi
+    if realisticarea == 1:
+        WP = frameneksibirPitch
+        if ikidernbire == 0:
+            if framenPitch > limitangle and (framenPitch - frameneksibirPitch) < 0 and (frameneksibirPitch - frameneksiikiPitch) > 0:
+                realisticarea = 2
+                birdenikiye = 1
+
+                birdenikiyePitchzipzip_P = (90 - frameneksibirPitch) * 2
+                birdenikiyePitchzipzip_P_motorswitch = 1
+                print("birdenikiyePitchzipzip_P")
+
+                if frameneksibirRoll - frameneksiikiRoll < 0:
+                    cwrollpositivegecis = cwrollpositivegecis - 1
+                if frameneksibirRoll - frameneksiikiRoll > 0:
+                    cwrollpositivegecis = cwrollpositivegecis + 1
+
+            if framenPitch < -limitangle and (framenPitch - frameneksibirPitch) > 0 and (frameneksibirPitch - frameneksiikiPitch) < 0:
+                realisticarea = 2
+                birdenikiye = 1
+
+                birdenikiyePitchzipzip_N = (90 + frameneksibirPitch) * 2
+                birdenikiyePitchzipzip_N_motorswitch = 1
+                print("birdenikiyePitchzipzip_N")
+
+                if frameneksibirRoll - frameneksiikiRoll < 0:
+                    cwrollpositivegecis = cwrollpositivegecis - 1
+                if frameneksibirRoll - frameneksiikiRoll > 0:
+                    cwrollpositivegecis = cwrollpositivegecis + 1
+    ikidernbire = 0
+
+    if realisticarea == 2:
+
+        if framenPitch > 0:
+            WP = 180 - frameneksibirPitch
+        if framenPitch < 0:
+            WP = -180 - frameneksibirPitch
+
+        if birdenikiye == 0:
+            if framenPitch > limitangle and (framenPitch - frameneksibirPitch) < 0 and (frameneksibirPitch - frameneksiikiPitch) > 0:
+                realisticarea = 1
+                ikidernbire = 1
+
+                ikidenbirePitchzipzip_P = (90 - frameneksibirPitch) * 2
+                ikidenbirePitchzipzip_P_motorswitch = 1
+                print("ikidenbirePitchzipzip_P")
+
+
+                if frameneksibirRoll - frameneksiikiRoll < 0:
+                    cwrollpositivegecis = cwrollpositivegecis - 1
+                if frameneksibirRoll - frameneksiikiRoll > 0:
+                    cwrollpositivegecis = cwrollpositivegecis + 1
+
+
+            if framenPitch < -limitangle and (framenPitch - frameneksibirPitch) > 0 and (frameneksibirPitch - frameneksiikiPitch) < 0:
+                realisticarea = 1
+                ikidernbire = 1
+
+                ikidenbirePitchzipzip_N = (90 + frameneksibirPitch) * 2
+                ikidenbirePitchzipzip_N_motorswitch = 1
+                print("ikidenbirePitchzipzip_N")
+
+                if frameneksibirRoll - frameneksiikiRoll < 0:
+                    cwrollpositivegecis = cwrollpositivegecis - 1
+                if frameneksibirRoll - frameneksiikiRoll > 0:
+                    cwrollpositivegecis = cwrollpositivegecis + 1
+    birdenikiye = 0
+
+
+
+    # Pitch in tur sayısı belirlenmesi ve720
+    wp2 = wp1
+    wp1 = WP
+    if (wp2 - wp1) > 252:
+        cwwp = cwwp + 1
+    if (wp1 - wp2) > 252:
+        cwwp = cwwp - 1
+    frameneksibirPitch_raw = WP + (cwwp * 360)
+
+    # Roll ün net olarak 720 ye turn edilmesi
+    frameneksibirRoll_raw = frameneksibirRoll + (cw * 360) - (cwrollpositivegecis * 180)
+
+
+
+    # A->1->B->2 gecisleri (bu gecislerin pitch taklası ile uyumu denenecek)
+    if frameneksibirPitch > PitchLimitforRoll and frameneksiikiPitch < PitchLimitforRoll and realisticarea == 1:
+        birdenA = 1
+        birdenB = 0
+        Adanbir = 0
+        Adaniki = 0
+        ikidenA = 0
+        ikidenB = 0
+        Bdeniki = 0
+        Bdenbir = 0
+    if frameneksibirPitch < PitchLimitforRoll and frameneksiikiPitch > PitchLimitforRoll and realisticarea == 1:
+        birdenA = 0
+        birdenB = 0
+        Adanbir = 1
+        Adaniki = 0
+        ikidenA = 0
+        ikidenB = 0
+        Bdeniki = 0
+        Bdenbir = 0
+    if frameneksibirPitch > -PitchLimitforRoll and frameneksiikiPitch < -PitchLimitforRoll and realisticarea == 1:
+        birdenA = 0
+        birdenB = 0
+        Adanbir = 0
+        Adaniki = 0
+        ikidenA = 0
+        ikidenB = 0
+        Bdeniki = 0
+        Bdenbir = 1
+    if frameneksibirPitch < -PitchLimitforRoll and frameneksiikiPitch > -PitchLimitforRoll and realisticarea == 1:
+        birdenA = 0
+        birdenB = 1
+        Adanbir = 0
+        Adaniki = 0
+        ikidenA = 0
+        ikidenB = 0
+        Bdeniki = 0
+        Bdenbir = 0
+    if frameneksibirPitch > PitchLimitforRoll and frameneksiikiPitch < PitchLimitforRoll and realisticarea == 2:
+        birdenA = 0
+        birdenB = 0
+        Adanbir = 0
+        Adaniki = 0
+        ikidenA = 1
+        ikidenB = 0
+        Bdeniki = 0
+        Bdenbir = 0
+    if frameneksibirPitch < PitchLimitforRoll and frameneksiikiPitch > PitchLimitforRoll and realisticarea == 2:
+        birdenA = 0
+        birdenB = 0
+        Adanbir = 0
+        Adaniki = 1
+        ikidenA = 0
+        ikidenB = 0
+        Bdeniki = 0
+        Bdenbir = 0
+    if frameneksibirPitch > -PitchLimitforRoll and frameneksiikiPitch < -PitchLimitforRoll and realisticarea == 2:
+        birdenA = 0
+        birdenB = 0
+        Adanbir = 0
+        Adaniki = 0
+        ikidenA = 0
+        ikidenB = 0
+        Bdeniki = 1
+        Bdenbir = 0
+    if frameneksibirPitch < -PitchLimitforRoll and frameneksiikiPitch > -PitchLimitforRoll and realisticarea == 2:
+        birdenA = 0
+        birdenB = 0
+        Adanbir = 0
+        Adaniki = 0
+        ikidenA = 0
+        ikidenB = 1
+        Bdeniki = 0
+        Bdenbir = 0
+
+
+
+
+
+        # if realisticarea == 2: R = R + 0.5 , realisticarea check with rotation way
+        # if Pbirdenikiyesoldan == 1 and frameneksibirPitch <= PitchLimitforRoll:
+
+
+    # sayimlar over ram olmaması icin sınırlandırılmalı birdenA cinsi
+    if birdenA == 1:
+        sayimbirdenA = sayimbirdenA + 1
+        sayimbirdenB = 0
+        sayimikidenA = 0
+        sayimikidenB = 0
+
+        sayimAdaniki = 0
+        sayimBdenbir = 0
+        sayimBdeniki = 0
+
+        sayimAdanbiralfa = 0
+
+        if sayimAdanbir >= (ziptoparlamasuresiRoll * (1 / ortframesuresi)):
+            sayimAdanbir = 0
+
+        if sayimbirdenA == 1:
+            newroll = frameneksibirRoll_raw
+
+        newroll = newroll + framebasinaeklenecekROLL
+        frameneksibirRoll_raw = newroll
+
+        endemikroll = newroll
+        # print(endemikroll)
+
+    if Adanbir == 1:
+        # print("rollalfa",rollalfa,"raw roll :",frameneksibirRoll_raw)
+        sayimAdanbiralfa = sayimAdanbiralfa + 1
+        if sayimAdanbiralfa == 1:
+            sayimAdanbir = sayimAdanbir + 1
+
+
+        sayimbirdenA = 0
+        sayimbirdenB = 0
+        sayimikidenA = 0
+        sayimikidenB = 0
+
+        sayimAdaniki = 0
+        sayimBdenbir = 0
+        sayimBdeniki = 0
+
+    if 0 < sayimAdanbir < (ziptoparlamasuresiRoll * (1 / ortframesuresi)):
+        if sayimAdanbir == 1:
+            rollfarki = frameneksibirRoll_raw - rollalfa
+
+        frameneksibirRoll_raw = frameneksibirRoll_raw - funcsech(rollfarki, sayimAdanbir,(ziptoparlamasuresiRoll * (1 / ortframesuresi)))
+        sayimAdanbir = sayimAdanbir + 1
+
+
+    if Adaniki == 1:
+        sayimAdanikialfa = sayimAdanikialfa + 1
+        if sayimAdanikialfa == 1:
+            sayimAdaniki = sayimAdaniki + 1
+
+
+
+        sayimbirdenA = 0
+        sayimbirdenB = 0
+        sayimikidenA = 0
+        sayimikidenB = 0
+
+        sayimAdanbir = 0
+        sayimBdenbir = 0
+        sayimBdeniki = 0
+
+    if 0 < sayimAdaniki < (ziptoparlamasuresiRoll * (1 / ortframesuresi)):
+        if sayimAdaniki == 1:
+            rollfarki = frameneksibirRoll_raw - rollalfa
+
+        frameneksibirRoll_raw = frameneksibirRoll_raw - funcsech(rollfarki, sayimAdaniki,(ziptoparlamasuresiRoll * (1 / ortframesuresi)))
+        sayimAdaniki = sayimAdaniki + 1
+
+
+
+    if ikidenA == 1:
+        sayimbirdenA = 0
+        sayimbirdenB = 0
+        sayimikidenA = sayimikidenA + 1
+        sayimikidenB = 0
+
+        sayimBdenbir = 0
+        sayimBdeniki = 0
+        sayimAdanbir = 0
+
+        sayimAdanbiralfa = 0
+        sayimAdanikialfa = 0
+
+        if sayimAdaniki >= (ziptoparlamasuresiRoll * (1 / ortframesuresi)):
+            sayimAdaniki = 0
+
+        if sayimikidenA == 1:
+            newroll = frameneksibirRoll_raw
+
+        newroll = newroll + framebasinaeklenecekROLL
+        frameneksibirRoll_raw = newroll
+
+        endemikroll = newroll
+        # print(endemikroll)
+
+    if Bdenbir == 1:
+        # print("rollalfa", rollalfa, "raw roll :", frameneksibirRoll_raw)
+        sayimBdenbiralfa = sayimBdenbiralfa + 1
+
+        if sayimBdenbiralfa == 1:
+            sayimBdenbir = sayimBdenbir + 1
+
+
+        sayimbirdenA = 0
+        sayimbirdenB = 0
+        sayimikidenA = 0
+        sayimikidenB = 0
+
+        sayimAdaniki = 0
+        sayimBdeniki = 0
+        sayimAdanbir = 0
+
+    if 0 < sayimBdenbir < (ziptoparlamasuresiRoll * (1 / ortframesuresi)):
+        # print("rollfarkıcheck")
+        if sayimBdenbir == 1:
+            rollfarki = frameneksibirRoll_raw - rollalfa
+            # print("rollfarkıcheck",rollfarki)
+
+        frameneksibirRoll_raw = frameneksibirRoll_raw - funcsech(rollfarki, sayimBdenbir,(ziptoparlamasuresiRoll * (1 / ortframesuresi)))
+        sayimBdenbir = sayimBdenbir + 1
+
+
+
+    if birdenB == 1:
+        sayimbirdenA = 0
+        sayimbirdenB = sayimbirdenB + 1
+        sayimikidenA = 0
+        sayimikidenB = 0
+
+        sayimAdaniki = 0
+        sayimBdeniki = 0
+        sayimAdanbir = 0
+
+        sayimBdenbiralfa = 0
+
+        if sayimBdenbir >= (ziptoparlamasuresiRoll * (1 / ortframesuresi)):
+            sayimBdenbir = 0
+
+
+
+        if sayimbirdenB == 1:
+            newroll = frameneksibirRoll_raw
+
+        newroll = newroll + framebasinaeklenecekROLL
+        frameneksibirRoll_raw = newroll
+
+        endemikroll = newroll
+        # print(endemikroll)
+
+    if Bdeniki == 1:
+        sayimBdenikialfa = sayimBdenikialfa + 1
+        if sayimBdenikialfa == 1:
+            sayimBdeniki = sayimBdeniki + 1
+
+
+        sayimbirdenA = 0
+        sayimbirdenB = 0
+        sayimikidenA = 0
+        sayimikidenB = 0
+
+        sayimAdaniki = 0
+        sayimBdenbir = 0
+        sayimAdanbir = 0
+
+    if 0 < sayimBdeniki < (ziptoparlamasuresiRoll * (1 / ortframesuresi)):
+        # print("rollfarkıcheck")
+        if sayimBdeniki == 1:
+            rollfarki = frameneksibirRoll_raw - rollalfa
+            # print("rollfarkıcheck", rollfarki)
+
+        frameneksibirRoll_raw = frameneksibirRoll_raw - funcsech(rollfarki, sayimBdeniki, (ziptoparlamasuresiRoll * (1 / ortframesuresi)))
+        sayimBdeniki = sayimBdeniki + 1
+
+    if ikidenB == 1:
+        sayimbirdenA = 0
+        sayimbirdenB = 0
+        sayimikidenA = 0
+        sayimikidenB = sayimikidenB + 1
+
+        sayimBdenbir = 0
+        sayimAdaniki = 0
+        sayimAdanbir = 0
+
+        sayimBdenbiralfa = 0
+        sayimBdenikialfa = 0
+
+
+        if sayimBdeniki >= (ziptoparlamasuresiRoll * (1 / ortframesuresi)):
+            sayimBdeniki = 0
+
+
+
+        if sayimikidenB == 1:
+            newroll = frameneksibirRoll_raw
+
+        newroll = newroll + framebasinaeklenecekROLL
+        frameneksibirRoll_raw = newroll
+
+        endemikroll = newroll
+        # print(endemikroll)
+
+
+
+    # farkframeneksibirPitch_raw = frameneksibirPitch_raw
+    # print("frameneksibirPitch_raw", frameneksibirPitch_raw)
+    # # Pitch zıplamasının egale edilmesi(motorlar iki katına çıkarılacak) 1. bölgede bi çeşit 2. bölgede bi çeşit veya motorlar ayrı bi obje gibi single yola çıkacak
+    if birdenikiyePitchzipzip_P_motorswitch == 1:
+        sayimbirdenikiyePitchzipzip_P = sayimbirdenikiyePitchzipzip_P + 1
+        # print("sayimbirdenikiyePitchzipzip_P:",sayimbirdenikiyePitchzipzip_P)
+
+        if sayimbirdenikiyePitchzipzip_P < (ziptoparlamasuresiPitch * (1 / ortframesuresi)):
+            frameneksibirPitch_raw = frameneksibirPitch_raw - funcsech(birdenikiyePitchzipzip_P,sayimbirdenikiyePitchzipzip_P,(ziptoparlamasuresiPitch * (1 / ortframesuresi)))
+        if sayimbirdenikiyePitchzipzip_P >= (ziptoparlamasuresiPitch * (1 / ortframesuresi)):
+            birdenikiyePitchzipzip_P_motorswitch = 0
+            sayimbirdenikiyePitchzipzip_P = 0
+    if ikidenbirePitchzipzip_P_motorswitch == 1:
+        sayimikidenbirePitchzipzip_P = sayimikidenbirePitchzipzip_P + 1
+        # print("sayimikidenbirePitchzipzip_P:",sayimikidenbirePitchzipzip_P)
+
+        if 1 < sayimikidenbirePitchzipzip_P < (ziptoparlamasuresiPitch * (1 / ortframesuresi)):
+            frameneksibirPitch_raw = frameneksibirPitch_raw + funcsech(ikidenbirePitchzipzip_P, sayimikidenbirePitchzipzip_P, (ziptoparlamasuresiPitch * (1 / ortframesuresi)))
+        if sayimikidenbirePitchzipzip_P >= (ziptoparlamasuresiPitch * (1 / ortframesuresi)):
+            ikidenbirePitchzipzip_P_motorswitch = 0
+            sayimikidenbirePitchzipzip_P = 0
+    if birdenikiyePitchzipzip_N_motorswitch == 1:
+        sayimbirdenikiyePitchzipzip_N = sayimbirdenikiyePitchzipzip_N + 1
+        # print("sayimbirdenikiyePitchzipzip_N:", sayimbirdenikiyePitchzipzip_N)
+
+        if sayimbirdenikiyePitchzipzip_N < (ziptoparlamasuresiPitch * (1 / ortframesuresi)):
+            frameneksibirPitch_raw = frameneksibirPitch_raw + funcsech(birdenikiyePitchzipzip_N, sayimbirdenikiyePitchzipzip_N, (ziptoparlamasuresiPitch * (1 / ortframesuresi)))
+        if sayimbirdenikiyePitchzipzip_N >= (ziptoparlamasuresiPitch * (1 / ortframesuresi)):
+            birdenikiyePitchzipzip_N_motorswitch = 0
+            sayimbirdenikiyePitchzipzip_N = 0
+    if ikidenbirePitchzipzip_N_motorswitch == 1:
+        sayimikidenbirePitchzipzip_N = sayimikidenbirePitchzipzip_N + 1
+        # print("sayimikidenbirePitchzipzip_N:",sayimikidenbirePitchzipzip_N)
+
+
+        if 1 < sayimikidenbirePitchzipzip_N < (ziptoparlamasuresiPitch * (1 / ortframesuresi)):
+            frameneksibirPitch_raw = frameneksibirPitch_raw - funcsech(ikidenbirePitchzipzip_N, sayimikidenbirePitchzipzip_N, (ziptoparlamasuresiPitch * (1 / ortframesuresi)))
+        if sayimikidenbirePitchzipzip_N >= (ziptoparlamasuresiPitch * (1 / ortframesuresi)):
+            ikidenbirePitchzipzip_N_motorswitch = 0
+            sayimikidenbirePitchzipzip_N = 0
+    # print("frameneksibirPitch_raw2", frameneksibirPitch_raw, "              fark :",frameneksibirPitch_raw - farkframeneksibirPitch_raw)
+
+
+
+
+
+
+
+    # 720 roll ve Pitch in 0 ila 1 arasına maplanmasi
+    R = (frameneksibirRoll_raw + 180)/360
+    WP = (frameneksibirPitch_raw + 180)/360
+    
+    # yazılacak degerler for arcsim
+    cikisroll = frameneksibirRoll_raw
+    cikispitch = frameneksibirPitch_raw
+    
+    l = 'Y' + str(WP) + 'Z' + str(R)
+    # print("Pitch:",frameneksibirPitch, '  Roll:',frameneksibirRoll_raw,"rollbypass:",frameneksibirRoll_rawBypass,"  endemik roll",round(endemikroll,3), "     betweentime(ms): ", round((frameneksibirTime - frameneksiikiTime), 3)*1000, "  realistic area:", realisticarea)
+    # print("birdenikiyePitchzipzip_P",birdenikiyePitchzipzip_P,"ikidenbirePitchzipzip_P",ikidenbirePitchzipzip_P,"birdenikiyePitchzipzip_N",birdenikiyePitchzipzip_N,"ikidenbirePitchzipzip_N",ikidenbirePitchzipzip_N, "     betweentime(ms): ", round((frameneksibirTime - frameneksiikiTime), 3)*1000,"  realistic area:", realisticarea)
+    # print("yazılanroll",frameneksibirRoll_raw, "     betweentime(ms): ", round((frameneksibirTime - frameneksiikiTime), 3)*1000,"  realistic area:", realisticarea,"Adanbir  :",Adanbir,"birdenA",birdenA)
+    # print("yazılanroll",frameneksibirRoll_raw, "     betweentime(ms): ", round((frameneksibirTime - frameneksiikiTime), 3)*1000,"  realistic area:", realisticarea,"Bdenbir  :",Bdenbir,"birdenB",birdenB)
+    # print( "     betweentime(ms): ", round((frameneksibirTime - frameneksiikiTime), 3)*1000)
+
+
+    h = l + '\n'
+    framenTime = time.time()
+    s.write(h.encode('ascii'))
+
+
+
+    rollbeta = rollalfa
+    rollalfa = frameneksibirRoll_raw
+
+    framebasinaeklenecekROLL = framenRoll_AVdegrees * (framenTime - frameneksibirTime)
+
+    framesuresi = (framenTime - frameneksibirTime)
+
+    frameneksiikiRoll = frameneksibirRoll
+    frameneksibirRoll = framenRoll
+
+    frameneksiikiPitch = frameneksibirPitch
+    frameneksibirPitch = framenPitch
+
+    frameneksiikiRoll_AVdegrees = frameneksibirRoll_AVdegrees
+    frameneksibirRoll_AVdegrees = framenRoll_AVdegrees
+
+    frameneksiikiTime = frameneksibirTime
+    frameneksibirTime = framenTime
+    # print("<-------------------------------------------------------------")
